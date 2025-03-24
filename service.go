@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/0t4u/wrench/internal/wrench"
 	"github.com/hexops/cmder"
-	"github.com/hexops/wrench/internal/wrench"
 	"github.com/kardianos/service"
 )
 

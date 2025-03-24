@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hexops/wrench/internal/errors"
+	"github.com/0t4u/wrench/internal/errors"
 	"github.com/natefinch/atomic"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )

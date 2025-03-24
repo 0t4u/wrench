@@ -4,8 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/0t4u/wrench/internal/errors"
 	"github.com/BurntSushi/toml"
-	"github.com/hexops/wrench/internal/errors"
 )
 
 type ModeType string

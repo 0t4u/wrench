@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hexops/wrench/internal/errors"
+	"github.com/0t4u/wrench/internal/errors"
 	"github.com/kardianos/service"
 )
 

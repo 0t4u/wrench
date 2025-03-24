@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/0t4u/wrench/internal/errors"
+	"github.com/0t4u/wrench/internal/wrench"
 	"github.com/hexops/cmder"
-	"github.com/hexops/wrench/internal/errors"
-	"github.com/hexops/wrench/internal/wrench"
 )
 
 func init() {

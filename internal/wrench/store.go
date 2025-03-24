@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hexops/wrench/internal/errors"
+	"github.com/0t4u/wrench/internal/errors"
 	"github.com/keegancsmith/sqlf"
 
 	_ "modernc.org/sqlite" // from https://gitlab.com/cznic/sqlite
