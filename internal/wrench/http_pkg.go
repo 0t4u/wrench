@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -357,6 +358,28 @@ func (b *Bot) httpPkgEnsureZigDownloadCached(version, versionKind, fname string)
 	if resp.StatusCode >= 400 && resp.StatusCode <= 500 {
 		// 404 not found, 403 forbidden, etc.
 		err := fmt.Errorf("bad response status: %s", resp.Status)
+
+		// file not available from source (but we expect it to be reachable)
+		// we should not encounter 429 status codes here, so we don't handle it
+		// maybe we should periodically clear the cache or use a LRU cache instead of doing this
+		// but we might accidentally DoS the source if unavailable files are continuously being
+		// requested (at that point why isn't the server operator imposing ratelimits???)
+		if (resp.StatusCode == 404 || resp.StatusCode >= 500) && versionKind == "stable" {
+			versionParts := strings.Split(version, ".")
+
+			// fail silently, this is not critical
+			if i, e := strconv.ParseInt(versionParts[1], 10, 64); e == nil {
+				// versions below 0.5.0 are allowed to be unavailable
+				if !(versionParts[0] == "0" && i <= 5) {
+					// don't cache error, we expect it to be temporary (we might need to cache 500
+					// status codes to prevent accidentally DoSing the source, to be decided)
+					fmt.Fprintf(logWriter, "error not cached: unexpected %v response for files with release %s", resp.StatusCode, version)
+					return err
+				}
+
+			}
+		}
+
 		cachedResponsesMu.Lock()
 		cachedResponses[url] = err
 		cachedResponsesMu.Unlock()
