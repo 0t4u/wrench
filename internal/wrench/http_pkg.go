@@ -363,7 +363,7 @@ func (b *Bot) httpPkgEnsureZigDownloadCached(version, versionKind, fname string)
 		// we should not encounter 429 status codes here, so we don't handle it
 		// maybe we should periodically clear the cache or use a LRU cache instead of doing this
 		// but we might accidentally DoS the source if unavailable files are continuously being
-		// requested (at that point why isn't the server operator imposing ratelimits???)
+		// requested (at that point why aren't you imposing ratelimits on spammy traffic???)
 		if (resp.StatusCode == 404 || resp.StatusCode >= 500) && versionKind == "stable" {
 			versionParts := strings.Split(version, ".")
 
