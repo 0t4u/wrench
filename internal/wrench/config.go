@@ -1,19 +1,10 @@
 package wrench
 
 import (
-	"os"
 	"path/filepath"
 
 	"github.com/0t4u/wrench/internal/errors"
 	"github.com/BurntSushi/toml"
-)
-
-type ModeType string
-
-const (
-	ModeWrench ModeType = "wrench"
-	ModePkg    ModeType = "pkg"
-	ModeZig    ModeType = "zig"
 )
 
 type Config struct {
@@ -38,19 +29,6 @@ type Config struct {
 
 func (c *Config) LogFilePath() string {
 	return filepath.Join(c.WrenchDir, "logs")
-}
-
-func (c *Config) WriteTo(file string) error {
-	if err := os.MkdirAll(filepath.Dir(file), os.ModePerm); err != nil {
-		return errors.Wrap(err, "MkdirAll")
-	}
-	f, err := os.Create(file)
-	if err != nil {
-		return errors.Wrap(err, "Create")
-	}
-	defer f.Close()
-	enc := toml.NewEncoder(f)
-	return errors.Wrap(enc.Encode(c), "Encode")
 }
 
 func LoadConfig(file string, out *Config) error {

@@ -1,7 +1,6 @@
 package wrench
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -22,7 +21,6 @@ type Bot struct {
 
 	started bool
 	logFile *os.File
-	store   *Store
 }
 
 func (b *Bot) loadConfig() error {
@@ -49,10 +47,6 @@ func (b *Bot) idLogf(id, format string, v ...any) {
 	for _, line := range strings.Split(msg, "\n") {
 		fmt.Fprintf(b.logFile, "%s %s: %s\n", timeNow, id, line)
 		fmt.Fprintf(os.Stderr, "%s %s: %s\n", timeNow, id, line)
-	}
-	// May be called before DB is initialized.
-	if b.store != nil {
-		_ = b.store.Log(context.Background(), id, msg)
 	}
 }
 
@@ -134,11 +128,6 @@ func (b *Bot) stop() error {
 		return nil
 	}
 	b.logFile.Close()
-	if b.store != nil {
-		if err := b.store.Close(); err != nil {
-			return errors.Wrap(err, "Store.Close")
-		}
-	}
 	return nil
 }
 
