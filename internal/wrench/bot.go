@@ -9,14 +9,10 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
-	"github.com/google/go-github/v48/github"
 	"github.com/hexops/wrench/internal/errors"
-	"github.com/hexops/wrench/internal/wrench/api"
 	"github.com/kardianos/service"
 )
 
@@ -24,19 +20,9 @@ type Bot struct {
 	ConfigFile string
 	Config     *Config
 
-	started                    bool
-	logFile                    *os.File
-	store                      *Store
-	github                     *github.Client
-	discordSession             *discordgo.Session
-	discordCommandHelp         [][2]string
-	discordCommands            map[string]func(...string) string
-	discordCommandsEmbed       map[string]func(...string) *discordgo.MessageEmbed
-	discordCommandsEmbedSecure map[string]func(...string) *discordgo.MessageEmbed
-	runner                     *api.Client
-	rebuildSelfMu              sync.Mutex
-	jobAcquire                 sync.Mutex
-	schedule                   []ScheduledJob
+	started bool
+	logFile *os.File
+	store   *Store
 }
 
 func (b *Bot) loadConfig() error {
@@ -90,7 +76,7 @@ func (b *Bot) Start(s service.Service) error {
 	}
 
 	go func() {
-		if err := b.run(s); err != nil {
+		if err := b.run(); err != nil {
 			if !service.Interactive() {
 				b.logf("wrench service: FATAL: %s", err)
 				if serviceLogger != nil {
@@ -103,11 +89,7 @@ func (b *Bot) Start(s service.Service) error {
 	return nil
 }
 
-func (b *Bot) run(s service.Service) error {
-	b.discordCommands = make(map[string]func(...string) string)
-	b.discordCommandsEmbed = make(map[string]func(...string) *discordgo.MessageEmbed)
-	b.discordCommandsEmbedSecure = make(map[string]func(...string) *discordgo.MessageEmbed)
-
+func (b *Bot) run() error {
 	if err := b.loadConfig(); err != nil {
 		return errors.Wrap(err, "loading config")
 	}
@@ -122,32 +104,8 @@ func (b *Bot) run(s service.Service) error {
 		b.logf("wrench service: STARTED")
 	}
 
-	if b.Config.Runner == "" {
-		if b.Config.ModeType() == ModeWrench {
-			b.store, err = OpenStore(filepath.Join(b.Config.WrenchDir, "wrench.db") + "?_pragma=busy_timeout%3d10000")
-			if err != nil {
-				return errors.Wrap(err, "OpenStore")
-			}
-			if err := b.githubStart(); err != nil {
-				return errors.Wrap(err, "github")
-			}
-			if err := b.discordStart(); err != nil {
-				return errors.Wrap(err, "discord")
-			}
-		}
-		if err := b.httpStart(); err != nil {
-			return errors.Wrap(err, "http")
-		}
-		if b.Config.ModeType() == ModeWrench {
-			if err := b.schedulerStart(); err != nil {
-				return errors.Wrap(err, "scheduler")
-			}
-			b.registerCommands()
-		}
-	} else {
-		if err := b.runnerStart(); err != nil {
-			return errors.Wrap(err, "runner")
-		}
+	if err := b.httpStart(); err != nil {
+		return errors.Wrap(err, "http")
 	}
 
 	b.started = true
@@ -176,23 +134,9 @@ func (b *Bot) stop() error {
 		return nil
 	}
 	b.logFile.Close()
-	if b.Config.Runner == "" {
-		if err := b.githubStop(); err != nil {
-			return errors.Wrap(err, "github")
-		}
-		if err := b.discordStop(); err != nil {
-			return errors.Wrap(err, "discord")
-		}
-		if err := b.httpStop(); err != nil {
-			return errors.Wrap(err, "http")
-		}
-		if b.store != nil {
-			if err := b.store.Close(); err != nil {
-				return errors.Wrap(err, "Store.Close")
-			}
-		}
-		if err := b.schedulerStop(); err != nil {
-			return errors.Wrap(err, "scheduler")
+	if b.store != nil {
+		if err := b.store.Close(); err != nil {
+			return errors.Wrap(err, "Store.Close")
 		}
 	}
 	return nil
