@@ -143,7 +143,7 @@ func (b *Bot) httpPkgZig(w http.ResponseWriter, r *http.Request) error {
 	if err := json.Unmarshal(indexFile, &index); err != nil {
 		return errors.Wrap(err, "unmarshalling index.json")
 	}
-	versionKind, err := b.zigVersionKind(version, index)
+	versionKind, err := b.zigVersionKind(version)
 	if err != nil {
 		return errors.Wrap(err, "unmarshalling index.json")
 	}
@@ -185,20 +185,9 @@ func (b *Bot) httpPkgZig(w http.ResponseWriter, r *http.Request) error {
 	return serveCacheHit()
 }
 
-func (b *Bot) zigVersionKind(version string, index map[string]map[string]any) (string, error) {
+func (b *Bot) zigVersionKind(version string) (string, error) {
 	if !strings.Contains(version, "-dev") {
 		return "stable", nil
-	}
-	for indexVersion := range index {
-		if !strings.Contains(indexVersion, "mach") {
-			continue
-		}
-		// indexVersion is a mach-nominated version, e.g. "mach-latest", "2024.5.0-mach"
-		info := index[indexVersion]
-		nominatedZigVersion := info["version"].(string)
-		if version == nominatedZigVersion {
-			return "mach", nil
-		}
 	}
 	return "dev", nil
 }
@@ -216,21 +205,20 @@ func (b *Bot) httpPkgZigWarmCache() error {
 	for indexVersion, v := range index {
 		ignored := map[string]struct{}{
 			// Versions that nobody cares about pre-caching.
-			"0.1.1":      struct{}{},
-			"0.2.0":      struct{}{},
-			"0.3.0":      struct{}{},
-			"0.4.0":      struct{}{},
-			"0.5.0":      struct{}{},
-			"0.6.0":      struct{}{},
-			"0.7.0":      struct{}{},
-			"0.7.1":      struct{}{},
-			"0.8.0":      struct{}{},
-			"0.8.1":      struct{}{},
-			"0.9.0":      struct{}{},
-			"0.9.1":      struct{}{},
-			"0.10.0":     struct{}{},
-			"0.10.1":     struct{}{},
-			"0.3.0-mach": struct{}{},
+			"0.1.1":  struct{}{},
+			"0.2.0":  struct{}{},
+			"0.3.0":  struct{}{},
+			"0.4.0":  struct{}{},
+			"0.5.0":  struct{}{},
+			"0.6.0":  struct{}{},
+			"0.7.0":  struct{}{},
+			"0.7.1":  struct{}{},
+			"0.8.0":  struct{}{},
+			"0.8.1":  struct{}{},
+			"0.9.0":  struct{}{},
+			"0.9.1":  struct{}{},
+			"0.10.0": struct{}{},
+			"0.10.1": struct{}{},
 
 			// Do not warm the cache with master Zig versions, as these would fill the disk quickly.
 			"master": struct{}{},
@@ -243,7 +231,7 @@ func (b *Bot) httpPkgZigWarmCache() error {
 		if aliasVersion, ok := v["version"]; ok {
 			version = aliasVersion.(string)
 		}
-		versionKind, err := b.zigVersionKind(version, index)
+		versionKind, err := b.zigVersionKind(version)
 		if err != nil {
 			return errors.Wrap(err, "unmarshalling index.json")
 		}
@@ -253,22 +241,61 @@ func (b *Bot) httpPkgZigWarmCache() error {
 	return nil
 }
 
+func zigVersionUsesOldTarballNameFormat(version string) bool {
+	if !strings.HasPrefix(version, "0.") {
+		return false
+	}
+
+	semver := semverRegexp.FindStringSubmatch(version)
+	if minor, err := strconv.Atoi(semver[2]); err == nil {
+		if minor < 14 {
+			return true
+		}
+
+		if minor == 14 && semver[3] == "0" {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (b *Bot) httpPkgEnsureZigVersionCached(version, versionKind string) {
-	for _, tmpl := range []string{
+	var files = []string{
 		"zig-$VERSION.tar.xz",
 		"zig-bootstrap-$VERSION.tar.xz",
-		"zig-windows-x86_64-$VERSION.zip",
-		"zig-windows-x86-$VERSION.zip",
-		"zig-windows-aarch64-$VERSION.zip",
-		"zig-macos-aarch64-$VERSION.tar.xz",
-		"zig-macos-x86_64-$VERSION.tar.xz",
-		"zig-linux-x86_64-$VERSION.tar.xz",
-		"zig-linux-x86-$VERSION.tar.xz",
-		"zig-linux-aarch64-$VERSION.tar.xz",
-		"zig-linux-armv7a-$VERSION.tar.xz",
-		"zig-linux-riscv64-$VERSION.tar.xz",
-		"zig-linux-powerpc64le-$VERSION.tar.xz",
-	} {
+		"zig-x86_64-windows-$VERSION.zip",
+		"zig-x86-windows-$VERSION.zip",
+		"zig-aarch64-windows-$VERSION.zip",
+		"zig-aarch64-macos-$VERSION.tar.xz",
+		"zig-x86_64-macos-$VERSION.tar.xz",
+		"zig-x86_64-linux-$VERSION.tar.xz",
+		"zig-x86-linux-$VERSION.tar.xz",
+		"zig-aarch64-linux-$VERSION.tar.xz",
+		"zig-armv7a-linux-$VERSION.tar.xz",
+		"zig-riscv64-linux-$VERSION.tar.xz",
+		"zig-powerpc64le-linux-$VERSION.tar.xz",
+	}
+
+	if versionKind == "stable" && zigVersionUsesOldTarballNameFormat(version) {
+		files = []string{
+			"zig-$VERSION.tar.xz",
+			"zig-bootstrap-$VERSION.tar.xz",
+			"zig-windows-x86_64-$VERSION.zip",
+			"zig-windows-x86-$VERSION.zip",
+			"zig-windows-aarch64-$VERSION.zip",
+			"zig-macos-aarch64-$VERSION.tar.xz",
+			"zig-macos-x86_64-$VERSION.tar.xz",
+			"zig-linux-x86_64-$VERSION.tar.xz",
+			"zig-linux-x86-$VERSION.tar.xz",
+			"zig-linux-aarch64-$VERSION.tar.xz",
+			"zig-linux-armv7a-$VERSION.tar.xz",
+			"zig-linux-riscv64-$VERSION.tar.xz",
+			"zig-linux-powerpc64le-$VERSION.tar.xz",
+		}
+	}
+
+	for _, tmpl := range files {
 		for _, sub := range []string{"", ".minisig"} {
 			fname := strings.Replace(tmpl+sub, "$VERSION", version, 1)
 			if err := b.httpPkgEnsureZigDownloadCached(version, versionKind, fname); err != nil {
@@ -301,11 +328,7 @@ func (b *Bot) httpPkgEnsureZigDownloadCached(version, versionKind, fname string)
 	}
 
 	url := ""
-	if versionKind == "mach" && !b.Config.PkgProxyDisableMachMirror {
-		url = "https://pkg.machengine.org" + path.Join("/zig/", fname)
-	} else if versionKind == "mach" && b.Config.PkgProxyDisableMachMirror {
-		url = "https://ziglang.org" + path.Join("/builds/", fname)
-	} else if versionKind == "stable" {
+	if versionKind == "stable" {
 		url = "https://ziglang.org" + path.Join("/download/", version, fname)
 	} else {
 		url = "https://ziglang.org" + path.Join("/builds/", fname)
@@ -313,29 +336,6 @@ func (b *Bot) httpPkgEnsureZigDownloadCached(version, versionKind, fname string)
 
 	// URLs that we know do not exist
 	ignored := map[string]struct{}{}
-	// minisig files for these two versions no longer exist anywhere.
-	for _, version := range []string{"0.12.0-dev.2063+804cee3b9", "0.12.0-dev.3180+83e578a18"} {
-		for _, tmpl := range []string{
-			"zig-$VERSION.tar.xz",
-			"zig-bootstrap-$VERSION.tar.xz",
-			"zig-windows-x86_64-$VERSION.zip",
-			"zig-windows-x86-$VERSION.zip",
-			"zig-windows-aarch64-$VERSION.zip",
-			"zig-macos-aarch64-$VERSION.tar.xz",
-			"zig-macos-x86_64-$VERSION.tar.xz",
-			"zig-linux-x86_64-$VERSION.tar.xz",
-			"zig-linux-x86-$VERSION.tar.xz",
-			"zig-linux-aarch64-$VERSION.tar.xz",
-			"zig-linux-armv7a-$VERSION.tar.xz",
-			"zig-linux-riscv64-$VERSION.tar.xz",
-			"zig-linux-powerpc64le-$VERSION.tar.xz",
-		} {
-			for _, sub := range []string{".minisig"} {
-				fname := strings.Replace(tmpl+sub, "$VERSION", version, 1)
-				ignored["https://pkg.machengine.org/zig/"+fname] = struct{}{}
-			}
-		}
-	}
 
 	if _, ignore := ignored[url]; ignore {
 		return errors.New("ignored")
@@ -466,24 +466,6 @@ func (b *Bot) httpPkgZigIndexCached() ([]byte, error) {
 		return nil, errors.Wrap(err, "parsing upstream https://ziglang.org/builds/index.json")
 	}
 
-	var machIndex *orderedmap.OrderedMap[string, *orderedmap.OrderedMap[string, any]]
-	{
-		// Fetch the Mach index.json which contains Mach nominated versions, but is otherwise not as
-		// up-to-date as ziglang.org's version.
-		ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-		resp, err = httpGet(ctx, "https://machengine.org/zig/index.json")
-		if err != nil {
-			b.logf("failed to fetch https://machengine.org/zig/index.json: %s (simply moving on with only the official index.json)", err)
-		} else {
-			defer resp.Body.Close()
-			machIndex = orderedmap.New[string, *orderedmap.OrderedMap[string, any]]()
-			if err := json.NewDecoder(resp.Body).Decode(&machIndex); err != nil {
-				b.logf("parsing mach https://machengine.org/zig/index.json: %s (simply moving on with only the official index.json)", err)
-			}
-		}
-	}
-
 	// "master", "0.13.0", etc.
 	for version := latestIndex.Oldest(); version != nil; version = version.Next() {
 		// "src", "x86_64-macos", etc.
@@ -504,33 +486,6 @@ func (b *Bot) httpPkgZigIndexCached() ([]byte, error) {
 				}
 				version.Value.Set(versionField.Key, newDownload)
 			}
-		}
-	}
-
-	if machIndex != nil {
-		// "master", "0.13.0", etc.
-		for version := machIndex.Oldest(); version != nil; version = version.Next() {
-			if _, present := latestIndex.Get(version.Key); present {
-				// Always use the upstream index.json in the event of a collision
-				continue
-			}
-
-			// "src", "x86_64-macos", etc.
-			for versionField := version.Value.Oldest(); versionField != nil; versionField = versionField.Next() {
-				// "version", "date", "src", "x86_64-macos", etc.
-				download, ok := versionField.Value.(map[string]any)
-				if ok {
-					newDownload := map[string]any{}
-					for key, value := range download {
-						newDownload[key] = value
-						if key == "tarball" {
-							newDownload["tarball"] = strings.Replace(value.(string), "https://pkg.machengine.org/zig/", b.Config.ExternalURL+"/zig/", 1)
-						}
-					}
-					version.Value.Set(versionField.Key, newDownload)
-				}
-			}
-			latestIndex.Set(version.Key, version.Value)
 		}
 	}
 
