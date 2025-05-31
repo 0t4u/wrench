@@ -3,16 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
-	"runtime"
 
 	"github.com/0t4u/wrench/internal/wrench"
 	"github.com/hexops/cmder"
-	"github.com/kardianos/service"
 )
 
 // serviceCommands contains all registered 'wrench service' subcommands.
@@ -33,12 +29,7 @@ Usage:
 The commands are:
 
 	run          run the server now
-	status       get the status of the wrench system service
 	logs         view service logs (stderr, stdout, and system service runner logs)
-	start        start wrench as a system service
-	stop         stop wrench as a system service
-	install      install wrench as a system service
-	uninstall    uninstall wrench as a system service
 
 Use "wrench service <command> -h" for more information about a command.
 `
@@ -75,71 +66,15 @@ func defaultConfigFilePath() string {
 	return "config.toml"
 }
 
-func newServiceBot() (service.Service, *wrench.Bot) {
-	return newServiceBotWithConfig(&ServiceConfig{
+func newBot() *wrench.Bot {
+	bot := &wrench.Bot{
 		ConfigFile: *serviceConfigFile,
-		Executable: "",
-	})
+	}
+
+	return bot
 }
 
 type ServiceConfig struct {
 	ConfigFile string
 	Executable string
-}
-
-func newServiceBotWithConfig(config *ServiceConfig) (service.Service, *wrench.Bot) {
-	bot := &wrench.Bot{
-		ConfigFile: config.ConfigFile,
-	}
-
-	var options service.KeyValue
-	var envVars map[string]string
-	if runtime.GOOS == "linux" {
-		options = make(service.KeyValue)
-		options["RestartSec"] = 1 // default is 120
-		u, err := user.Current()
-		if err != nil {
-			log.Fatal("user.Current", err)
-		}
-		envVars = map[string]string{"HOME": u.HomeDir}
-	}
-
-	var executable string
-	var arguments []string
-	wrenchCmd := fmt.Sprintf(`%s service -config=%s run`, config.Executable, config.ConfigFile)
-	switch runtime.GOOS {
-	case "linux":
-		var err error
-		executable, err = exec.LookPath("sh")
-		if err != nil {
-			log.Fatal("LookPath", err)
-		}
-		arguments = []string{"-lc", wrenchCmd}
-	case "darwin":
-		var err error
-		executable, err = exec.LookPath("zsh")
-		if err != nil {
-			log.Fatal("LookPath", err)
-		}
-		arguments = []string{"-lc", wrenchCmd}
-	case "windows":
-		executable = config.Executable
-		arguments = []string{"service", "-config=" + config.ConfigFile, "run"}
-	}
-
-	// TODO: should perhaps allow setting Arguments, Executable, and EnvVars via config.toml
-	svcConfig := &service.Config{
-		Name:        "wrench",
-		DisplayName: "Wrench",
-		Description: "Let's fix this!",
-		Arguments:   arguments,
-		Executable:  executable,
-		EnvVars:     envVars,
-		Option:      options,
-	}
-	s, err := service.New(bot, svcConfig)
-	if err != nil {
-		log.Fatal("creating service", err)
-	}
-	return s, bot
 }

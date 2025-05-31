@@ -24,8 +24,8 @@ Examples:
 	handler := func(args []string) error {
 		_ = flagSet.Parse(args)
 
-		service, _ := newServiceBot()
-		return service.Run()
+		bot := newBot()
+		return bot.Start()
 	}
 
 	// Register the command.

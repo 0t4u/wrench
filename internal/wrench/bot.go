@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/0t4u/wrench/internal/errors"
-	"github.com/kardianos/service"
 )
 
 type Bot struct {
@@ -63,20 +62,9 @@ func (w writerFunc) Write(p []byte) (n int, err error) {
 	return w(p)
 }
 
-func (b *Bot) Start(s service.Service) error {
-	serviceLogger, _ := s.Logger(nil)
-	if serviceLogger != nil && !service.Interactive() {
-		_ = serviceLogger.Info("wrench service started")
-	}
-
+func (b *Bot) Start() error {
 	go func() {
 		if err := b.run(); err != nil {
-			if !service.Interactive() {
-				b.logf("wrench service: FATAL: %s", err)
-				if serviceLogger != nil {
-					_ = serviceLogger.Error("wrench service: FATAL:", err)
-				}
-			}
 			log.Fatal(err)
 		}
 	}()
@@ -94,9 +82,6 @@ func (b *Bot) run() error {
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("creating log file %s", logFilePath))
 	}
-	if !service.Interactive() {
-		b.logf("wrench service: STARTED")
-	}
 
 	if err := b.httpStart(); err != nil {
 		return errors.Wrap(err, "http")
@@ -112,36 +97,13 @@ func (b *Bot) run() error {
 
 	b.logf("Interrupted, shutting down..")
 
-	return errors.Wrap(b.stop(), "stop")
+	return errors.Wrap(b.Stop(), "stop")
 }
 
-func (b *Bot) Stop(s service.Service) error {
-	serviceLogger, _ := s.Logger(nil)
-	if serviceLogger != nil && !service.Interactive() {
-		_ = serviceLogger.Info("wrench service stopped")
-	}
-	return b.stop()
-}
-
-func (b *Bot) stop() error {
+func (b *Bot) Stop() error {
 	if !b.started {
 		return nil
 	}
 	b.logFile.Close()
 	return nil
-}
-
-func ServiceStatus(svc service.Service) (string, error) {
-	status, err := svc.Status()
-	if err != nil {
-		return "", err
-	}
-	if status == service.StatusUnknown {
-		return "unknown", nil
-	} else if status == service.StatusRunning {
-		return "running", nil
-	} else if status == service.StatusStopped {
-		return "stopped", nil
-	}
-	panic(fmt.Sprintf("unexpected status: %v", status))
 }

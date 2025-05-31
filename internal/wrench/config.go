@@ -16,12 +16,6 @@ type Config struct {
 	// Disabled if an empty string.
 	Address string `toml:"Address,omitempty"`
 
-	// When PkgProxy=true, disable any HTTP requests to pkg.machengine.org
-	//
-	// Note: setting this means your mirror may not be able to get Mach nominated
-	// versions, because ziglang.org purges them after some time.
-	PkgProxyDisableMachMirror bool `toml:"PkgProxyDisableMachMirror,omitempty"`
-
 	// Where Wrench should store its data, cofiguration, etc. Defaults to the directory containing
 	// this config file.
 	WrenchDir string `toml:"WrenchDir,omitempty"`
